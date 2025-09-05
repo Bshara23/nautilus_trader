@@ -441,9 +441,13 @@ cdef class TickBarAggregator(BarAggregator):
         BarType bar_type not None,
         handler not None: Callable[[Bar], None],
     ) -> None:
+        # Only normalize to the standard bar type when the provided bar type
+        # is composite. For already-standard bar types, keep the original
+        # instance to avoid unnecessary FFI round-trips which may be brittle
+        # on some platforms.
         super().__init__(
             instrument=instrument,
-            bar_type=bar_type.standard(),
+            bar_type=bar_type.standard() if bar_type.is_composite() else bar_type,
             handler=handler,
         )
 
@@ -488,9 +492,11 @@ cdef class VolumeBarAggregator(BarAggregator):
         BarType bar_type not None,
         handler not None: Callable[[Bar], None],
     ) -> None:
+        # Normalize only when necessary (composite input). Retain the original
+        # standard bar type when already standard.
         super().__init__(
             instrument=instrument,
-            bar_type=bar_type.standard(),
+            bar_type=bar_type.standard() if bar_type.is_composite() else bar_type,
             handler=handler,
         )
 
@@ -583,9 +589,11 @@ cdef class ValueBarAggregator(BarAggregator):
         BarType bar_type not None,
         handler not None: Callable[[Bar], None],
     ) -> None:
+        # Normalize only when necessary (composite input). Retain the original
+        # standard bar type when already standard.
         super().__init__(
             instrument=instrument,
-            bar_type=bar_type.standard(),
+            bar_type=bar_type.standard() if bar_type.is_composite() else bar_type,
             handler=handler,
         )
 
@@ -1058,8 +1066,12 @@ cdef class TimeBarAggregator(BarAggregator):
         cdef Bar passthrough_bar
 
         if self._passthrough_bar_type:
+            # When passthrough is enabled and the composite bar type has the same
+            # step/aggregation as the standard bar type, normalize the emitted
+            # bar to the standard (internal) bar type to reflect internal
+            # aggregation semantics while preserving OHLCV values.
             passthrough_bar = Bar(
-                bar_type=self.bar_type,
+                bar_type=self.bar_type.standard(),
                 open=bar.open,
                 high=bar.high,
                 low=bar.low,
